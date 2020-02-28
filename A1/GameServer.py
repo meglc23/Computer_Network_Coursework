@@ -128,6 +128,7 @@ class Game(object):
                 partner = cur_room.find_partner(cur_player)
             if partner and partner.status and cur_room.player_val_pair[partner] != -1:
                 self.send_msg(partner.conn_socket, 3021)
+                partner.end_game()
                 self.game_rooms[cur_player.room_no].reset()
         cur_player.log_off()
         return False
@@ -153,7 +154,7 @@ class Game(object):
         cur_player.login(conn_socket)
         connect = self.send_msg(conn_socket, 1001)
 
-        # login successful
+        # login successful, start playing game
         while(cur_player.status != 0):
             msg = []
             connect &= self.get_msg(conn_socket, msg)
@@ -186,7 +187,7 @@ class Game(object):
             print("Socket sending error: ", err)
             return False
         return True
-    
+
     def quick_win(self, cur_player, room, lock):
         room.reset()
         lock.release()
@@ -199,6 +200,7 @@ class Game(object):
         connect_partner = True
         action = 4002
         print("in parse: ", msg)
+        print("status: ", cur_player.status)
         if (msg[0] == "/list" and len(msg) == 1):
             action = 3001
 
