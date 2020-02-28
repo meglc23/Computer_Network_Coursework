@@ -45,15 +45,17 @@ def main(argv):
     # receive acknowledge - e.g., "OK"
     while True:
         user_input = input()
+        
+        # testing line
+        if user_input == "/guess false":
+            conn_socket.close()
+            break
         send_msg(conn_socket, user_input)
         msg = get_msg(conn_socket)
         if msg[0] == "4001":
-            print(msg)
             break
         elif msg[0] == "3011":
-            print(msg)
             msg = get_msg(conn_socket)
-    print(msg)
 
     print("Client ends")
     conn_socket.close()
