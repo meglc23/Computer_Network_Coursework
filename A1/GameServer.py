@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+# TODO: update the room player num if offline
+
 import random
 import socket
 import sys
@@ -17,7 +19,7 @@ MSG = {1001: "Authentication successful",
        3021: "You are the winner",
        3022: "You lost this game",
        3023: "The result is a tie",
-       4001: "Buy bye",
+       4001: "Bye bye",
        4002: "Unrecognized message"
        }
 
@@ -105,7 +107,7 @@ class Game(object):
     def __init__(self, server_socket):
         self.lock = threading.Lock()
         self.server_socket = server_socket
-        self.game_rooms = [GameRoom(id) for id in range(TOTAL_ROOM+1)]
+        self.game_rooms = [GameRoom(id) for id in range(TOTAL_ROOM)]
         self.players = [Player(pair[0]) for pair in USER_INFO]
 
     def start_game(self):
@@ -179,7 +181,7 @@ class Game(object):
         msg = str(action) + " " + MSG[action]
         if action == 3001:
             with self.lock:
-                msg += str(TOTAL_ROOM) + ' '.join(
+                msg += str(TOTAL_ROOM) + ' ' + ' '.join(
                     [str(len(room.player_val_pair)) for room in self.game_rooms])
         try:
             conn_socket.send(msg.encode())
