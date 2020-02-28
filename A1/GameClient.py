@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-import socket
 import os.path
+import socket
 import sys
 
 
@@ -42,14 +42,8 @@ def main(argv):
         if msg[0] == "1001":
             success_login = True
 
-    # receive acknowledge - e.g., "OK"
     while True:
         user_input = input()
-        
-        # testing line
-        if user_input == "/guess false":
-            conn_socket.close()
-            break
         send_msg(conn_socket, user_input)
         msg = get_msg(conn_socket)
         if msg[0] == "4001":
