@@ -27,8 +27,8 @@ MSG = {1001: "Authentication successful",
 class GameRoom(object):
     def __init__(self, id):
         self.id = id
-        self.player_val_pair = {}
-        self.rand_bool_val = -1     # 0: false, 1: true
+        self.player_val_pair = {}   # Player obj, guessing value (default -1)
+        self.rand_bool_val = -1     # -1: not set, 0: false, 1: true
 
     def add_player(self, cur_player):
         self.player_val_pair[cur_player] = -1
@@ -38,9 +38,6 @@ class GameRoom(object):
             if player != cur_player:
                 return player
         return None
-
-    def set_player_val(self, cur_player, val):
-        self.player_val_pair[cur_player] = val
 
     def generate_rand_bool(self):
         if self.rand_bool_val == -1:
@@ -60,19 +57,26 @@ class GameRoom(object):
         return self.rand_bool_val == cur_val
 
     def reset(self):
-        self.player_val_pair = {}
-        self.rand_bool_val = -1
+        self.__init__(self.id)
 
 
 class Player(object):
     def __init__(self, name):
         self.name = name
+        self.get_initial_set()
+        print(self.name)
+
+    def get_initial_set(self):
         self.room_no = -1
+
         self.status = 0
-        self.conn_socket = None
-        # status:
         # 0 -> out of house,    1 -> in the game hall,
         # 2 -> waiting in room, 3 -> playing a game
+
+        self.conn_socket = None
+        self.partner_offline = False
+        # If the player has not made a guess, and his partner leave -> partner offline = True
+        # And his next sending message will be ignored, cause the return message is always 3021
 
     def __eq__(self, other):
         if not isinstance(other, Player):
@@ -83,24 +87,16 @@ class Player(object):
         return hash(self.name)
 
     def login(self, conn_socket):
-        self.set_status(1)
+        self.status = 1
         self.conn_socket = conn_socket
 
     def join_room(self, room_no):
         self.room_no = room_no
-        self.set_status(2)
+        self.status = 2
 
     def end_game(self):
         self.room_no = -1
-        self.set_status(1)
-
-    def log_off(self):
-        self.room_no = -1
-        self.set_status(0)
-        self.conn_socket = None
-
-    def set_status(self, new_status):
-        self.status = new_status
+        self.status = 1
 
 
 class Game(object):
@@ -108,7 +104,7 @@ class Game(object):
         self.lock = threading.Lock()
         self.server_socket = server_socket
         self.game_rooms = [GameRoom(id) for id in range(TOTAL_ROOM)]
-        self.players = [Player(pair[0]) for pair in USER_INFO]
+        self.players = [Player(name) for name in USER_INFO]
 
     def start_game(self):
         while True:
@@ -118,6 +114,7 @@ class Game(object):
             new_client.start()
 
     def check_connection(self, connect, cur_player, conn_socket, msg):
+        print("checking")
         if connect and len(msg) > 0:
             return True
         if not cur_player:
@@ -126,13 +123,15 @@ class Game(object):
         if cur_player.status == 3:
             with self.lock:
                 cur_room = self.game_rooms[cur_player.room_no]
-                cur_room.player_val_pair.pop(cur_player, None)
                 partner = cur_room.find_partner(cur_player)
-            if partner and partner.status == 3 and cur_room.player_val_pair[partner] != -1:
+            if partner:
                 self.send_msg(partner.conn_socket, 3021)
+                if cur_room.player_val_pair[partner] == -1:
+                    partner.partner_offline = True
                 partner.end_game()
+            with self.lock:
                 self.game_rooms[cur_player.room_no].reset()
-        cur_player.log_off()
+        cur_player.get_initial_set()
         return False
 
     def handle_each_client(self, client):
@@ -190,12 +189,6 @@ class Game(object):
             return False
         return True
 
-    def quick_win(self, cur_player, room, lock):
-        room.reset()
-        lock.release()
-        cur_player.end_game()
-        return 3021
-
     def parse_msg(self, msg, cur_player):
         status = cur_player.status
         cur_player_room_no = cur_player.room_no
@@ -203,6 +196,11 @@ class Game(object):
         action = 4002
         print("in parse: ", msg)
         print("status: ", cur_player.status)
+
+        if cur_player.partner_offline:
+            cur_player.partner_offline = False
+            return None
+
         if (msg[0] == "/list" and len(msg) == 1):
             action = 3001
 
@@ -224,11 +222,11 @@ class Game(object):
                 room_to_join.add_player(cur_player)
             if players_in_room == 1:
                 partner = room_to_join.find_partner(cur_player)
-                cur_player.set_status(3)
-                partner.set_status(3)
-                connect_partner = self.send_msg(partner.conn_socket, 3012)
-                if not self.check_connection(connect_partner, partner, partner.conn_socket, ["dummy"]):
-                    return self.quick_win(cur_player, room_to_join, self.lock)
+                cur_player.status = 3
+                partner.status = 3
+                if not self.send_msg(partner.conn_socket, 3012):
+                    self.lock.release()
+                    return None
 
             self.lock.release()
             action = players_in_room + 3011
@@ -239,34 +237,28 @@ class Game(object):
 
             self.lock.acquire()
             cur_player_room = self.game_rooms[cur_player_room_no]
-            cur_player_room.set_player_val(cur_player, int(msg[1] == "true"))
+            cur_player_room.player_val_pair[cur_player] = int(msg[1] == "true")
             partner = cur_player_room.find_partner(cur_player)
             if not partner:
-                return self.quick_win(cur_player, cur_player_room, self.lock)
-            result = cur_player_room.calc_game_res(cur_player)
-            action = 0
-            if result == -1:    # wait for partner
                 self.lock.release()
                 return None
-            elif result == 0:   # currennt player loses
-                connect_partner = self.send_msg(partner.conn_socket, 3021)
-                action = 3022
-            elif result == 1:   # current player wins
-                connect_partner = self.send_msg(partner.conn_socket, 3022)
-                action = 3021
-            else:               # tie
-                connect_partner = self.send_msg(partner.conn_socket, 3023)
-                action = 3023
+            result = cur_player_room.calc_game_res(cur_player)
+            # wait for partner
+            if result == -1 or not self.send_msg(partner.conn_socket, 3021+result):
+                self.lock.release()             # no partner
+                return None
+            if result == 2:                     # set action value for the current player
+                action = 3023                   # tie -> 3023
+            else:
+                action = 3022 - result          # win or lose -> 3021 or 3022
 
             cur_player_room.reset()
             self.lock.release()
             cur_player.end_game()
-            if not self.check_connection(connect_partner, partner, partner.conn_socket, ["dummy"]):
-                return self.quick_win(cur_player, cur_player_room, self.lock)
             partner.end_game()
 
         elif msg[0] == "/exit" and len(msg) == 1 and status == 1:
-            cur_player.log_off()
+            cur_player.get_initial_set()
             action = 4001
 
         return action
