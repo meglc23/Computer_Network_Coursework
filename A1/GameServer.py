@@ -128,7 +128,7 @@ class Game(object):
                 cur_room = self.game_rooms[cur_player.room_no]
                 cur_room.player_val_pair.pop(cur_player, None)
                 partner = cur_room.find_partner(cur_player)
-            if partner and partner.status and cur_room.player_val_pair[partner] != -1:
+            if partner and partner.status == 3 and cur_room.player_val_pair[partner] != -1:
                 self.send_msg(partner.conn_socket, 3021)
                 partner.end_game()
                 self.game_rooms[cur_player.room_no].reset()
@@ -208,10 +208,10 @@ class Game(object):
 
         elif (msg[0] == "/enter" and len(msg) == 2 and status == 1):
             try:
-                room_no = int(msg[1])
+                room_no = int(msg[1]) - 1
             except:
                 return action
-            if room_no <= 0 or room_no > TOTAL_ROOM:
+            if room_no < 0 or room_no >= TOTAL_ROOM:
                 return action
 
             # calculate players ALREADY in the room
@@ -282,7 +282,6 @@ def main(argv):
             pair = line.rstrip('\n').split(':')
             USER_INFO[pair[0]] = pair[1]
 
-    print(USER_INFO)
     # create socket and bind
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
