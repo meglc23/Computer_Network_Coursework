@@ -22,6 +22,7 @@ def get_msg(conn_socket):
     print(msg)
     return msg.split()
 
+
 def main(argv):
     # create socket and connect to server
     try:

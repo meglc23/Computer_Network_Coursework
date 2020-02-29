@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-# TODO: update the room player num if offline
-
 import random
 import socket
 import sys
@@ -64,7 +62,6 @@ class Player(object):
     def __init__(self, name):
         self.name = name
         self.get_initial_set()
-        print(self.name)
 
     def get_initial_set(self):
         self.room_no = -1
@@ -114,7 +111,6 @@ class Game(object):
             new_client.start()
 
     def check_connection(self, connect, cur_player, conn_socket, msg):
-        print("checking")
         if connect and len(msg) > 0:
             return True
         if not cur_player:
@@ -129,13 +125,14 @@ class Game(object):
                 if cur_room.player_val_pair[partner] == -1:
                     partner.partner_offline = True
                 partner.end_game()
+        if cur_player.status >= 2:
             with self.lock:
                 self.game_rooms[cur_player.room_no].reset()
         cur_player.get_initial_set()
         return False
 
     def handle_each_client(self, client):
-        conn_socket, addr = client
+        conn_socket, _ = client
 
         # login authentication
         auth_info = []
@@ -165,6 +162,7 @@ class Game(object):
             if action:
                 connect = self.send_msg(conn_socket, action)
 
+        # logout
         conn_socket.close()
 
     def get_msg(self, conn_socket, msg):
@@ -194,8 +192,6 @@ class Game(object):
         cur_player_room_no = cur_player.room_no
         connect_partner = True
         action = 4002
-        print("in parse: ", msg)
-        print("status: ", cur_player.status)
 
         if cur_player.partner_offline:
             cur_player.partner_offline = False
