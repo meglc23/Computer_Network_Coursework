@@ -1,5 +1,4 @@
 ### Assignment 1: A Simple Game House Application
-_by Chen Li (3035334620)_
 
 * This project is based on Python socket programming, where the client establishes TCP connections with the server programme. It includes the functions of a user querying game room information, entering a game room, and playing with other users.
 * The programme should be run on Python 3.6+, and is only tested on MacOS environment.
